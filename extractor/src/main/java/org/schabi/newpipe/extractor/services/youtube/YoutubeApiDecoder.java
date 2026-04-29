@@ -15,7 +15,6 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,14 +50,14 @@ public final class YoutubeApiDecoder {
     @Nonnull
     static String decodeSignature(@Nonnull final String playerId,
                                   @Nonnull final String signature) throws ParsingException {
-        return decode("sig", signature);
+        return decode(playerId, "sig", signature);
     }
 
     /**
      * Decode a throttling parameter (n parameter) using the PipePipe API.
      *
      * @param playerId          the YouTube player ID (8-character hash)
-     * @param nParameter the obfuscated n parameter to decode
+     * @param nParameter        the obfuscated n parameter to decode
      * @return the deobfuscated n parameter
      * @throws ParsingException if the API call fails or returns invalid data
      */
@@ -66,35 +65,37 @@ public final class YoutubeApiDecoder {
     static String decodeThrottlingParameter(@Nonnull final String playerId,
                                             @Nonnull final String nParameter)
             throws ParsingException {
-        return decode( "n", nParameter);
+        return decode(playerId, "n", nParameter);
     }
 
     /**
      * Generic decode method that calls the PipePipe API.
      *
-     * @param paramType the parameter type ("sig" or "n")
-     * @param value     the obfuscated value to decode
+     * @param playerId   the YouTube player ID (8-character hash)
+     * @param paramType  the parameter type ("sig" or "n")
+     * @param value      the obfuscated value to decode
      * @return the deobfuscated value
      * @throws ParsingException if the API call fails or returns invalid data
      */
     @Nonnull
-    private static String decode(@Nonnull final String paramType,
+    private static String decode(@Nonnull final String playerId,
+                                 @Nonnull final String paramType,
                                  @Nonnull final String value) throws ParsingException {
         // Check cache first
-        final String cacheKey = paramType + ":" + value;
+        final String cacheKey = playerId + ":" + paramType + ":" + value;
         final String cachedResult = DECODE_CACHE.get(cacheKey);
         if (cachedResult != null) {
             return cachedResult;
         }
 
         try {
-            // Build API URL (no player parameter)
+            // Build API URL
             final String encodedValue = URLEncoder.encode(value, StandardCharsets.UTF_8.name());
-            final String url = API_BASE_URL + "?" + paramType + "=" + encodedValue;
+            final String url = API_BASE_URL + "?player=" + playerId + "&" + paramType + "=" + encodedValue;
 
             // Set headers
-            final Map<String, List<String>> headers = new HashMap<>();
-            headers.put("User-Agent", Collections.singletonList(USER_AGENT));
+            final Map<String, java.util.List<String>> headers = new HashMap<>();
+            headers.put("User-Agent", java.util.Collections.singletonList(USER_AGENT));
 
             // Make API call
             final Response response = NewPipe.getDownloader().get(url, headers, Localization.DEFAULT);
@@ -105,24 +106,20 @@ public final class YoutubeApiDecoder {
 
             // Validate response structure
             if (!"result".equals(jsonResponse.getString("type"))) {
-                throw new ParsingException(
-                        "API returned unexpected type: " + jsonResponse.getString("type"));
+                throw new ParsingException("API returned unexpected type: " + jsonResponse.getString("type"));
             }
 
             // Extract decoded value
             final JsonObject firstResponse = jsonResponse.getArray("responses").getObject(0);
             if (!"result".equals(firstResponse.getString("type"))) {
-                throw new ParsingException(
-                        "API response item has unexpected type: "
-                                + firstResponse.getString("type"));
+                throw new ParsingException("API response item has unexpected type: " + firstResponse.getString("type"));
             }
 
             final JsonObject data = firstResponse.getObject("data");
             final String decodedValue = data.getString(value);
 
             if (decodedValue == null || decodedValue.isEmpty()) {
-                throw new ParsingException(
-                        "API returned empty decoded value for: " + value);
+                throw new ParsingException("API returned empty decoded value for: " + value);
             }
 
             // Cache the result
@@ -133,8 +130,6 @@ public final class YoutubeApiDecoder {
             throw new ParsingException("Failed to call decode API", e);
         } catch (final JsonParserException e) {
             throw new ParsingException("Failed to parse API response", e);
-        } catch (final ParsingException e) {
-            throw e;
         } catch (final Exception e) {
             throw new ParsingException("Unexpected error during decoding", e);
         }
@@ -159,15 +154,18 @@ public final class YoutubeApiDecoder {
     /**
      * Batch decode multiple signatures and throttling parameters in a single API call.
      *
+     * @param playerId        the YouTube player ID (8-character hash)
      * @param signatureParams list of obfuscated signatures to decode (can be null or empty)
      * @param nParams         list of obfuscated n parameters to decode (can be null or empty)
      * @return a BatchDecodeResult containing the decoded values
      * @throws ParsingException if the API call fails or returns invalid data
      */
     @Nonnull
-    static BatchDecodeResult decodeBatch(@Nullable final List<String> signatureParams,
+    static BatchDecodeResult decodeBatch(@Nonnull final String playerId,
+                                         @Nullable final List<String> signatureParams,
                                          @Nullable final List<String> nParams)
             throws ParsingException {
+        // Validate input
         final boolean hasSigs = signatureParams != null && !signatureParams.isEmpty();
         final boolean hasNs = nParams != null && !nParams.isEmpty();
 
@@ -183,7 +181,7 @@ public final class YoutubeApiDecoder {
 
         if (hasSigs) {
             for (final String sig : signatureParams) {
-                final String cacheKey = "sig:" + sig;
+                final String cacheKey = playerId + ":sig:" + sig;
                 final String cachedResult = DECODE_CACHE.get(cacheKey);
                 if (cachedResult != null) {
                     sigResults.put(sig, cachedResult);
@@ -195,7 +193,7 @@ public final class YoutubeApiDecoder {
 
         if (hasNs) {
             for (final String n : nParams) {
-                final String cacheKey = "n:" + n;
+                final String cacheKey = playerId + ":n:" + n;
                 final String cachedResult = DECODE_CACHE.get(cacheKey);
                 if (cachedResult != null) {
                     nResults.put(n, cachedResult);
@@ -211,50 +209,44 @@ public final class YoutubeApiDecoder {
         }
 
         try {
-            // Build API URL without player parameter
+            // Build API URL with batch parameters
             final StringBuilder urlBuilder = new StringBuilder(API_BASE_URL);
-            boolean firstParam = true;
+            urlBuilder.append("?player=").append(playerId);
 
             if (!uncachedNs.isEmpty()) {
-                urlBuilder.append(firstParam ? '?' : '&');
-                firstParam = false;
-                urlBuilder.append("n=");
+                urlBuilder.append("&n=");
                 for (int i = 0; i < uncachedNs.size(); i++) {
                     if (i > 0) {
                         urlBuilder.append(',');
                     }
-                    urlBuilder.append(URLEncoder.encode(
-                            uncachedNs.get(i), StandardCharsets.UTF_8.name()));
+                    urlBuilder.append(URLEncoder.encode(uncachedNs.get(i), StandardCharsets.UTF_8.name()));
                 }
             }
 
             if (!uncachedSigs.isEmpty()) {
-                urlBuilder.append(firstParam ? '?' : '&');
-                urlBuilder.append("sig=");
+                urlBuilder.append("&sig=");
                 for (int i = 0; i < uncachedSigs.size(); i++) {
                     if (i > 0) {
                         urlBuilder.append(',');
                     }
-                    urlBuilder.append(URLEncoder.encode(
-                            uncachedSigs.get(i), StandardCharsets.UTF_8.name()));
+                    urlBuilder.append(URLEncoder.encode(uncachedSigs.get(i), StandardCharsets.UTF_8.name()));
                 }
             }
 
             // Set headers
-            final Map<String, List<String>> headers = new HashMap<>();
-            headers.put("User-Agent", Collections.singletonList(USER_AGENT));
+            final Map<String, java.util.List<String>> headers = new HashMap<>();
+            headers.put("User-Agent", java.util.Collections.singletonList(USER_AGENT));
 
             // Make API call
-            final Response response = NewPipe.getDownloader().get(
-                    urlBuilder.toString(), headers, Localization.DEFAULT);
+            final Response response = NewPipe.getDownloader().get(urlBuilder.toString(), headers, Localization.DEFAULT);
 
             // Parse response
             final String responseBody = response.responseBody();
             final JsonObject jsonResponse = JsonParser.object().from(responseBody);
 
+            // Validate response structure
             if (!"result".equals(jsonResponse.getString("type"))) {
-                throw new ParsingException(
-                        "API returned unexpected type: " + jsonResponse.getString("type"));
+                throw new ParsingException("API returned unexpected type: " + jsonResponse.getString("type"));
             }
 
             final JsonArray responses = jsonResponse.getArray("responses");
@@ -264,20 +256,18 @@ public final class YoutubeApiDecoder {
             if (!uncachedNs.isEmpty()) {
                 final JsonObject nResponse = responses.getObject(responseIndex++);
                 if (!"result".equals(nResponse.getString("type"))) {
-                    throw new ParsingException(
-                            "N parameter response has unexpected type: "
-                                    + nResponse.getString("type"));
+                    throw new ParsingException("N parameter response has unexpected type: " + nResponse.getString("type"));
                 }
 
                 final JsonObject nData = nResponse.getObject("data");
                 for (final String nParam : uncachedNs) {
                     final String decodedValue = nData.getString(nParam);
                     if (decodedValue == null || decodedValue.isEmpty()) {
-                        throw new ParsingException(
-                                "API returned empty decoded value for n parameter: " + nParam);
+                        throw new ParsingException("API returned empty decoded value for n parameter: " + nParam);
                     }
                     nResults.put(nParam, decodedValue);
-                    DECODE_CACHE.put("n:" + nParam, decodedValue);
+                    // Cache the result
+                    DECODE_CACHE.put(playerId + ":n:" + nParam, decodedValue);
                 }
             }
 
@@ -285,20 +275,18 @@ public final class YoutubeApiDecoder {
             if (!uncachedSigs.isEmpty()) {
                 final JsonObject sigResponse = responses.getObject(responseIndex);
                 if (!"result".equals(sigResponse.getString("type"))) {
-                    throw new ParsingException(
-                            "Signature response has unexpected type: "
-                                    + sigResponse.getString("type"));
+                    throw new ParsingException("Signature response has unexpected type: " + sigResponse.getString("type"));
                 }
 
                 final JsonObject sigData = sigResponse.getObject("data");
                 for (final String sig : uncachedSigs) {
                     final String decodedValue = sigData.getString(sig);
                     if (decodedValue == null || decodedValue.isEmpty()) {
-                        throw new ParsingException(
-                                "API returned empty decoded value for signature: " + sig);
+                        throw new ParsingException("API returned empty decoded value for signature: " + sig);
                     }
                     sigResults.put(sig, decodedValue);
-                    DECODE_CACHE.put("sig:" + sig, decodedValue);
+                    // Cache the result
+                    DECODE_CACHE.put(playerId + ":sig:" + sig, decodedValue);
                 }
             }
 
@@ -307,8 +295,6 @@ public final class YoutubeApiDecoder {
             throw new ParsingException("Failed to call batch decode API", e);
         } catch (final JsonParserException e) {
             throw new ParsingException("Failed to parse batch API response", e);
-        } catch (final ParsingException e) {
-            throw e;
         } catch (final Exception e) {
             throw new ParsingException("Unexpected error during batch decoding", e);
         }
