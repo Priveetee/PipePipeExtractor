@@ -316,7 +316,8 @@ public class YoutubeLockupStreamInfoItemExtractor implements StreamInfoItemExtra
 
         final String lowerCaseViewsText = viewsText.toLowerCase(Locale.ROOT);
         if (lowerCaseViewsText.contains("no views")
-                || lowerCaseViewsText.contains("akukho ukubukwa")) {
+                || lowerCaseViewsText.contains("akukho ukubukwa")
+                || lowerCaseViewsText.contains("akukho kubukwa")) {
             return 0L;
         } else if (lowerCaseViewsText.contains("recommended")
                 || lowerCaseViewsText.contains("okutusiwe")) {

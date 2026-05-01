@@ -454,7 +454,8 @@ public class YoutubeStreamInfoItemExtractor implements StreamInfoItemExtractor {
                                 || content.toLowerCase().contains("no views")
                                 || content.toLowerCase().contains("akukho"))) {
                             if (content.toLowerCase().contains("no views")
-                                    || content.toLowerCase().contains("akukho ukubukwa")) {
+                                    || content.toLowerCase().contains("akukho ukubukwa")
+                                    || content.toLowerCase().contains("akukho kubukwa")) {
                                 return 0;
                             } else if (content.toLowerCase().contains("recommended")
                                     || content.toLowerCase().contains("okutusiwe")) {
@@ -471,7 +472,8 @@ public class YoutubeStreamInfoItemExtractor implements StreamInfoItemExtractor {
             final String viewCount = getTextFromObject(videoInfo.getObject("viewCountText"));
 
             if (viewCount.toLowerCase().contains("no views")
-                    || viewCount.toLowerCase().contains("akukho ukubukwa")) {
+                    || viewCount.toLowerCase().contains("akukho ukubukwa")
+                    || viewCount.toLowerCase().contains("akukho kubukwa")) {
                 return 0;
             } else if (viewCount.toLowerCase().contains("recommended")
                     || viewCount.toLowerCase().contains("okutusiwe")) {
