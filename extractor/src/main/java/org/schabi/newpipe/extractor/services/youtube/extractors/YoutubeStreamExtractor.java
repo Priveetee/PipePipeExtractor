@@ -1337,6 +1337,11 @@ public class YoutubeStreamExtractor extends StreamExtractor {
                 androidCall = fetchAndroidMobileJsonPlayer(contentCountry, localization, videoId);
             } else {
                 safariCall = fetchSafariJsonPlayer(contentCountry, localization, videoId);
+                try {
+                    androidCall = fetchAndroidMobileJsonPlayer(contentCountry, localization, videoId);
+                } catch (final Exception e) {
+                    errors.add(e);
+                }
             }
 
             final byte[] body = JsonWriter.string(
@@ -1375,9 +1380,9 @@ public class YoutubeStreamExtractor extends StreamExtractor {
             }
             long startTime = System.nanoTime();
             do {
-                if (((StringUtils.isBlank(ServiceList.YouTube.getTokens()) && androidCall.isFinished())
-                        || (StringUtils.isNotBlank(ServiceList.YouTube.getTokens()) && safariCall.isFinished())) &&
-                        webPageCall.isFinished() && nextDataCall.isFinished()) {
+                if ((androidCall == null || androidCall.isFinished())
+                        && (safariCall == null || safariCall.isFinished())
+                        && webPageCall.isFinished() && nextDataCall.isFinished()) {
                     break;
                 }
             } while (TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - startTime) <= ServiceList.YouTube.getLoadingTimeout());
@@ -1400,6 +1405,15 @@ public class YoutubeStreamExtractor extends StreamExtractor {
             if (playerResponse != null) {
                 checkPlayabilityStatus(playerResponse.getObject("playabilityStatus"), videoId);
                 setStreamType();
+            }
+
+            if (streamType != StreamType.LIVE_STREAM
+                    && StringUtils.isNotBlank(ServiceList.YouTube.getTokens())
+                    && !hasUsableAdaptiveFormatUrl(androidStreamingData)) {
+                sabrRetryCount++;
+                if (sabrRetryCount <= maxSabrRetries) {
+                    continue;
+                }
             }
 
             if (streamType != StreamType.LIVE_STREAM && isSabrOnlyResponse()
@@ -1438,7 +1452,20 @@ public class YoutubeStreamExtractor extends StreamExtractor {
         return false;
     }
 
+    private boolean hasUsableAdaptiveFormatUrl(@Nullable final JsonObject streamingData) {
+        if (streamingData == null) {
+            return false;
+        }
 
+        final JsonArray adaptiveFormats = streamingData.getArray(ADAPTIVE_FORMATS);
+        for (int i = 0; i < adaptiveFormats.size(); i++) {
+            final JsonObject format = adaptiveFormats.getObject(i);
+            if (format.has("url") || format.has(SIGNATURE_CIPHER) || format.has(CIPHER)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     public static JsonObject checkPlayabilityStatus(@Nonnull JsonObject playabilityStatus, String videoId)
             throws ParsingException {
@@ -1560,7 +1587,10 @@ public class YoutubeStreamExtractor extends StreamExtractor {
                         return;
                     }
 
-                    YoutubeStreamExtractor.this.playerResponse = playerResponseObject;
+                    if (StringUtils.isBlank(ServiceList.YouTube.getTokens())
+                            || YoutubeStreamExtractor.this.playerResponse == null) {
+                        YoutubeStreamExtractor.this.playerResponse = playerResponseObject;
+                    }
 
                     final JsonObject streamingData = playerResponseObject.getObject(STREAMING_DATA);
                     if (!isNullOrEmpty(streamingData)) {
