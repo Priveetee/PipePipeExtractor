@@ -728,7 +728,7 @@ public class YoutubeStreamExtractor extends StreamExtractor {
 
         String hlsUrl = getManifestUrl(
                 "hls",
-                Arrays.asList(safariStreamingData, androidStreamingData, tvHtml5SimplyEmbedStreamingData, webStreamingData));
+                getHlsStreamingDataObjects());
 
         if (!hlsUrl.isEmpty()) {
             hlsUrl = deobfuscateManifestUrl(hlsUrl);
@@ -762,15 +762,31 @@ public class YoutubeStreamExtractor extends StreamExtractor {
 
     @Nonnull
     private static String getManifestUrl(@Nonnull final String manifestType,
-                                         @Nonnull final List<JsonObject> streamingDataObjects) {
+                                          @Nonnull final List<JsonObject> streamingDataObjects) {
         final String manifestKey = manifestType + "ManifestUrl";
+        final boolean dashManifest = "dash".equals(manifestType);
 
         return streamingDataObjects.stream()
                 .filter(Objects::nonNull)
-                .map(streamingDataObject -> streamingDataObject.getString(manifestKey) + "?mpd_version=7")
-                .filter(Objects::nonNull)
+                .map(streamingDataObject -> streamingDataObject.getString(manifestKey))
+                .filter(StringUtils::isNotBlank)
+                .map(manifestUrl -> dashManifest
+                        ? appendManifestQueryParameter(manifestUrl, "mpd_version=7")
+                        : manifestUrl)
                 .findFirst()
                 .orElse(EMPTY_STRING);
+    }
+
+    private static String appendManifestQueryParameter(@Nonnull final String manifestUrl,
+                                                       @Nonnull final String parameter) {
+        if (manifestUrl.contains(parameter)) {
+            return manifestUrl;
+        }
+
+        final int fragmentIndex = manifestUrl.indexOf('#');
+        final String baseUrl = fragmentIndex >= 0 ? manifestUrl.substring(0, fragmentIndex) : manifestUrl;
+        final String fragment = fragmentIndex >= 0 ? manifestUrl.substring(fragmentIndex) : EMPTY_STRING;
+        return baseUrl + (baseUrl.contains("?") ? "&" : "?") + parameter + fragment;
     }
 
     // Cache for batch-processed streams
@@ -891,8 +907,7 @@ public class YoutubeStreamExtractor extends StreamExtractor {
 
     @Nonnull
     private String getHlsManifestUrlFromStreamingData() {
-        for (final JsonObject sd : Arrays.asList(
-                safariStreamingData)) {
+        for (final JsonObject sd : getHlsStreamingDataObjects()) {
             if (sd != null) {
                 final String url = sd.getString("hlsManifestUrl");
                 if (url != null && !url.isEmpty()) {
@@ -903,15 +918,15 @@ public class YoutubeStreamExtractor extends StreamExtractor {
         return EMPTY_STRING;
     }
 
-    private void parseHlsMasterManifest(@Nonnull final String manifestContent,
-                                         final String videoId) throws ParsingException {
-        final String[] lines = manifestContent.split("\n");
-        final String preferredAudioLanguage = ServiceList.YouTube.getAudioLanguage();
+    @Nonnull
+    private List<JsonObject> getHlsStreamingDataObjects() {
+        return Arrays.asList(safariStreamingData, androidStreamingData,
+                tvHtml5SimplyEmbedStreamingData, webStreamingData);
+    }
 
-        final Map<String, String> audioTrackUrls = new LinkedHashMap<>();
-        final Map<String, String> audioTrackNames = new LinkedHashMap<>();
-        final Map<String, String> audioTrackLocales = new LinkedHashMap<>();
-        final Map<String, String> audioTrackAconts = new LinkedHashMap<>();
+    private void parseHlsMasterManifest(@Nonnull final String manifestContent,
+                                          final String videoId) throws ParsingException {
+        final String[] lines = manifestContent.split("\n");
 
         for (int i = 0; i < lines.length; i++) {
             final String line = lines[i].trim();
@@ -961,16 +976,6 @@ public class YoutubeStreamExtractor extends StreamExtractor {
                         audioTrackName = langPart + " (original)";
                     } else {
                         audioTrackName = langPart;
-                    }
-
-                    if (!audioTrackUrls.containsKey(audioTrackId)
-                            || "original".equals(acont)) {
-                        audioTrackUrls.put(audioTrackId, streamUrl);
-                    }
-                    audioTrackNames.put(audioTrackId, audioTrackName);
-                    audioTrackLocales.put(audioTrackId, audioLocale);
-                    if (acont != null) {
-                        audioTrackAconts.put(audioTrackId, acont);
                     }
                 }
 
@@ -1033,27 +1038,6 @@ public class YoutubeStreamExtractor extends StreamExtractor {
                 audioBuilder.setAudioLocale(language.split("-")[0]);
             }
             cachedAudioStreams.add(audioBuilder.build());
-        }
-
-        if (cachedAudioStreams.isEmpty() && !audioTrackUrls.isEmpty()) {
-            for (final Map.Entry<String, String> entry : audioTrackUrls.entrySet()) {
-                final String trackId = entry.getKey();
-                final String url = entry.getValue();
-                final String trackName = audioTrackNames.get(trackId);
-                final String locale = audioTrackLocales.get(trackId);
-
-                final AudioStream.Builder audioBuilder = new AudioStream.Builder()
-                        .setId("hls-" + videoId + "-audio-" + trackId)
-                        .setContent(url, true)
-                        .setMediaFormat(MediaFormat.M4A)
-                        .setDeliveryMethod(DeliveryMethod.HLS)
-                        .setAudioTrackId(trackId)
-                        .setAudioLocale(locale);
-                if (trackName != null) {
-                    audioBuilder.setAudioTrackName(trackName);
-                }
-                cachedAudioStreams.add(audioBuilder.build());
-            }
         }
     }
 
@@ -1409,7 +1393,8 @@ public class YoutubeStreamExtractor extends StreamExtractor {
 
             if (streamType != StreamType.LIVE_STREAM
                     && StringUtils.isNotBlank(ServiceList.YouTube.getTokens())
-                    && !hasUsableAdaptiveFormatUrl(androidStreamingData)) {
+                    && !hasUsableAdaptiveFormatUrl(androidStreamingData)
+                    && getHlsManifestUrlFromStreamingData().isEmpty()) {
                 sabrRetryCount++;
                 if (sabrRetryCount <= maxSabrRetries) {
                     continue;
@@ -1458,6 +1443,9 @@ public class YoutubeStreamExtractor extends StreamExtractor {
         }
 
         final JsonArray adaptiveFormats = streamingData.getArray(ADAPTIVE_FORMATS);
+        if (adaptiveFormats == null || adaptiveFormats.isEmpty()) {
+            return false;
+        }
         for (int i = 0; i < adaptiveFormats.size(); i++) {
             final JsonObject format = adaptiveFormats.getObject(i);
             if (format.has("url") || format.has(SIGNATURE_CIPHER) || format.has(CIPHER)) {
