@@ -1711,6 +1711,9 @@ YoutubeParsingHelper {
             headers.put("Cookie", singletonList(ServiceList.YouTube.getTokens()));
             try {
                 headers.put("Authorization", singletonList(getAuthorizationHeader(ServiceList.YouTube.getTokens())));
+            } catch (final IllegalArgumentException e) {
+                // Some user-provided cookie exports do not include SAPISID/PAPISID auth cookies.
+                // Keep the cookies, but do not fail the whole extraction before the request is made.
             } catch (Exception e) {
                 throw new ExtractionException("Failed to get authorization header", e);
             }
@@ -2327,7 +2330,10 @@ YoutubeParsingHelper {
         if (sapisid == null) {
             sapisid = cookies.get("__Secure-3PAPISID");
             if (sapisid == null) {
-                throw new IllegalArgumentException("SAPISID not found in cookies");
+                sapisid = cookies.get("__Secure-1PAPISID");
+                if (sapisid == null) {
+                    throw new IllegalArgumentException("SAPISID not found in cookies");
+                }
             }
         }
 
