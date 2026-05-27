@@ -1318,6 +1318,11 @@ public class YoutubeStreamExtractor extends StreamExtractor {
             CancellableCall safariCall = null;
 
             if (StringUtils.isBlank(ServiceList.YouTube.getTokens())) {
+                try {
+                    safariCall = fetchSafariJsonPlayer(contentCountry, localization, videoId);
+                } catch (final Exception e) {
+                    errors.add(e);
+                }
                 androidCall = fetchAndroidMobileJsonPlayer(contentCountry, localization, videoId);
             } else {
                 safariCall = fetchSafariJsonPlayer(contentCountry, localization, videoId);
