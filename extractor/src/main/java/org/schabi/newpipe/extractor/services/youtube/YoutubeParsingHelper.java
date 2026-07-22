@@ -1781,10 +1781,10 @@ YoutubeParsingHelper {
         addLoggedInHeaders(headers);
         logPerformance(videoId, "webPlayer.prepareHeaders", stageStartedAt);
         stageStartedAt = System.nanoTime();
-        final byte[] requestBody = addSessionPoTokenToPlayerBody(body, localization,
-                contentCountry);
+        final YoutubePlayerRequest playerRequest = prepareSessionPoTokenPlayerRequest(
+                body, localization, contentCountry);
         final CancellableCall call = getDownloader().postAsync(
-                url, headers, requestBody, localization, new Downloader.AsyncCallback() {
+                url, headers, playerRequest.getBody(), localization, new Downloader.AsyncCallback() {
                     @Override
                     public void onSuccess(Response response) throws ExtractionException {
                         JsonObject webPlayerResponse;
@@ -1793,13 +1793,18 @@ YoutubeParsingHelper {
                             if (Objects.equals(webPlayerResponse.getObject("playabilityStatus").getString("status"), "LOGIN_REQUIRED")) {
                                 final JsonObject playabilityStatus = webPlayerResponse.getObject("playabilityStatus");
                                 final String reason = playabilityStatus.getString("reason");
+                                if (hasAuthenticatedSessionPoToken(
+                                        playerRequest.getVisitorData() != null)) {
+                                    throw new YoutubeSessionRejectedException(reason);
+                                }
                                 if (reason != null && (reason.contains("age") || reason.contains("inappropriate"))) {
                                     throw new AgeRestrictedContentException("This age-restricted video cannot be watched anonymously");
                                 }
                                 if (playabilityStatus.has("desktopLegacyAgeGateReason")) {
                                     throw new AgeRestrictedContentException("This age-restricted video cannot be watched anonymously");
                                 }
-                                throw new AntiBotException(reason);
+                                throw getLoginRequiredException(reason,
+                                        playerRequest.getVisitorData() != null);
                             }
                             if (isPlayerResponseNotValid(webPlayerResponse, videoId)) {
                                 throw new ExtractionException("Initial WEB player response is not valid");
@@ -1827,6 +1832,19 @@ YoutubeParsingHelper {
                 });
         logPerformance(videoId, "webPlayer.enqueue", stageStartedAt);
         return call;
+    }
+
+    static ParsingException getLoginRequiredException(@Nullable final String reason,
+                                                       final boolean sessionPoTokenAttached) {
+        if (hasAuthenticatedSessionPoToken(sessionPoTokenAttached)) {
+            return new YoutubeSessionRejectedException(reason);
+        }
+        return new AntiBotException(reason);
+    }
+
+    private static boolean hasAuthenticatedSessionPoToken(
+            final boolean sessionPoTokenAttached) {
+        return ServiceList.YouTube.hasTokens() && sessionPoTokenAttached;
     }
 
     @Nonnull

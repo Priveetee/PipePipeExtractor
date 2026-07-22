@@ -7,6 +7,8 @@ import org.schabi.newpipe.extractor.NewPipe;
 import org.schabi.newpipe.extractor.ServiceList;
 import org.schabi.newpipe.extractor.localization.ContentCountry;
 import org.schabi.newpipe.extractor.localization.Localization;
+import org.schabi.newpipe.extractor.exceptions.AntiBotException;
+import org.schabi.newpipe.extractor.exceptions.YoutubeSessionRejectedException;
 import org.schabi.newpipe.extractor.services.youtube.sabr.YoutubeSabrClientProfile;
 import org.schabi.newpipe.extractor.services.youtube.sabr.YoutubeSabrInfo;
 import org.schabi.newpipe.extractor.services.youtube.sabr.YoutubeSabrProbe;
@@ -66,6 +68,17 @@ class YoutubeSessionPoTokenTest {
                 .getString("visitorData"));
         assertEquals("session-token-in", body.getObject("serviceIntegrityDimensions")
                 .getString("poToken"));
+    }
+
+    @Test
+    void distinguishesAnonymousLoginChallengeFromRejectedSession() {
+        assertTrue(YoutubeParsingHelper.getLoginRequiredException("challenge", false)
+                instanceof AntiBotException);
+
+        ServiceList.YouTube.setTokens("SAPISID=test; __Secure-3PAPISID=test");
+
+        assertTrue(YoutubeParsingHelper.getLoginRequiredException("rejected", true)
+                instanceof YoutubeSessionRejectedException);
     }
 
     @Test

@@ -1799,7 +1799,8 @@ public class YoutubeStreamExtractor extends StreamExtractor {
         if (playerResponse == null) {
             throw new ExtractionException("YouTube player response is missing");
         }
-        checkPlayabilityStatus(playerResponse.getObject("playabilityStatus"), videoId);
+        checkPlayabilityStatus(playerResponse.getObject("playabilityStatus"), videoId,
+                playerResponseVisitorData != null);
         setStreamType();
         final String selectedClient = NewPipe.getYoutubePlayerClient();
         final boolean hasConfiguredHls = configuredStreamingData != null
@@ -1875,6 +1876,11 @@ public class YoutubeStreamExtractor extends StreamExtractor {
             recordedErrors = new ArrayList<>(errors);
         }
         for (final Throwable error : recordedErrors) {
+            if (error instanceof YoutubeSessionRejectedException) {
+                throw (YoutubeSessionRejectedException) error;
+            }
+        }
+        for (final Throwable error : recordedErrors) {
             if (error instanceof AntiBotException) {
                 throw (AntiBotException) error;
             }
@@ -1899,6 +1905,13 @@ public class YoutubeStreamExtractor extends StreamExtractor {
 
     public static JsonObject checkPlayabilityStatus(@Nonnull JsonObject playabilityStatus, String videoId)
             throws ParsingException {
+        return checkPlayabilityStatus(playabilityStatus, videoId, false);
+    }
+
+    static JsonObject checkPlayabilityStatus(@Nonnull final JsonObject playabilityStatus,
+                                             final String videoId,
+                                             final boolean sessionPoTokenAttached)
+            throws ParsingException {
         String status = playabilityStatus.getString("status");
         if (status == null || status.equalsIgnoreCase("ok")) {
             return null;
@@ -1912,7 +1925,11 @@ public class YoutubeStreamExtractor extends StreamExtractor {
                 if (message != null && message.contains("private")) {
                     throw new PrivateContentException("This video is private");
                 }
-            } else if (reason.contains("age")) {
+            }
+            if (ServiceList.YouTube.hasTokens() && sessionPoTokenAttached) {
+                throw new YoutubeSessionRejectedException(reason);
+            }
+            if (reason != null && reason.contains("age")) {
                 throw new AgeRestrictedContentException(
                         "This age-restricted video cannot be watched anonymously");
             }
@@ -2154,7 +2171,8 @@ public class YoutubeStreamExtractor extends StreamExtractor {
                     final JsonObject configuredResponse = JsonUtils.toJsonObject(
                             getValidJsonResponseBody(response));
                     checkPlayabilityStatus(
-                            configuredResponse.getObject("playabilityStatus"), videoId);
+                            configuredResponse.getObject("playabilityStatus"), videoId,
+                            playerRequest.getVisitorData() != null);
                     if (isPlayerResponseNotValid(configuredResponse, videoId)) {
                         throw new ExtractionException(selectedClient + " player response is not valid");
                     }
