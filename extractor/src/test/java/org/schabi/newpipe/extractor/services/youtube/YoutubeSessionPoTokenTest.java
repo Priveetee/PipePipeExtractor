@@ -36,8 +36,11 @@ class YoutubeSessionPoTokenTest {
     @Test
     void injectsMatchingVisitorDataAndTokenForLoggedOutRequest() throws Exception {
         final AtomicBoolean loggedIn = new AtomicBoolean(true);
-        NewPipe.setYoutubeSessionPoTokenProvider((clientName, localization, contentCountry, login) -> {
+        NewPipe.setYoutubeSessionPoTokenProvider((clientName, clientVersion, userAgent,
+                                                   localization, contentCountry, login) -> {
             assertEquals("ANDROID_VR", clientName);
+            assertEquals("1.65.10", clientVersion);
+            assertEquals("test-user-agent", userAgent);
             loggedIn.set(login);
             return new YoutubeSessionPoToken("visitor-out", "session-token-out");
         });
@@ -55,7 +58,8 @@ class YoutubeSessionPoTokenTest {
     void reportsLoggedInStateAndInjectsTokenWithoutRemovingPlayerFields() throws Exception {
         ServiceList.YouTube.setTokens("SAPISID=test; __Secure-3PAPISID=test");
         final AtomicBoolean loggedIn = new AtomicBoolean(false);
-        NewPipe.setYoutubeSessionPoTokenProvider((clientName, localization, contentCountry, login) -> {
+        NewPipe.setYoutubeSessionPoTokenProvider((clientName, clientVersion, userAgent,
+                                                   localization, contentCountry, login) -> {
             loggedIn.set(login);
             return new YoutubeSessionPoToken("visitor-in", "session-token-in");
         });
@@ -88,7 +92,8 @@ class YoutubeSessionPoTokenTest {
                 + "\"serviceIntegrityDimensions\":{\"poToken\":\"explicit-token\"}}")
                 .getBytes(StandardCharsets.UTF_8);
         final AtomicInteger calls = new AtomicInteger();
-        NewPipe.setYoutubeSessionPoTokenProvider((clientName, localization, contentCountry, login) -> {
+        NewPipe.setYoutubeSessionPoTokenProvider((clientName, clientVersion, userAgent,
+                                                   localization, contentCountry, login) -> {
             calls.incrementAndGet();
             return new YoutubeSessionPoToken("new-visitor", "new-token");
         });
@@ -103,7 +108,8 @@ class YoutubeSessionPoTokenTest {
     @Test
     void providerFailureKeepsPreviousExtractionRequest() {
         final byte[] body = playerBody("WEB");
-        NewPipe.setYoutubeSessionPoTokenProvider((clientName, localization, contentCountry, login) -> {
+        NewPipe.setYoutubeSessionPoTokenProvider((clientName, clientVersion, userAgent,
+                                                   localization, contentCountry, login) -> {
             throw new IllegalStateException("no WebView");
         });
 
@@ -116,7 +122,8 @@ class YoutubeSessionPoTokenTest {
     @Test
     void preparedPlayerRequestRetainsTheExactProviderVisitor() throws Exception {
         final AtomicInteger calls = new AtomicInteger();
-        NewPipe.setYoutubeSessionPoTokenProvider((clientName, localization, contentCountry, login) -> {
+        NewPipe.setYoutubeSessionPoTokenProvider((clientName, clientVersion, userAgent,
+                                                   localization, contentCountry, login) -> {
             final int call = calls.incrementAndGet();
             return new YoutubeSessionPoToken("visitor-" + call, "token-" + call);
         });
@@ -129,6 +136,7 @@ class YoutubeSessionPoTokenTest {
 
         assertEquals(1, calls.get());
         assertEquals("visitor-1", request.getVisitorData());
+        assertEquals("2.test", request.getClientVersion());
         assertEquals("visitor-1", decorated.getObject("context").getObject("client")
                 .getString("visitorData"));
         assertEquals("token-1", decorated.getObject("serviceIntegrityDimensions")
@@ -156,6 +164,12 @@ class YoutubeSessionPoTokenTest {
 
     private static byte[] playerBody(final String clientName) {
         return ("{\"context\":{\"client\":{\"clientName\":\"" + clientName
-                + "\"}},\"videoId\":\"video\"}").getBytes(StandardCharsets.UTF_8);
+                + "\",\"clientVersion\":\"" + clientVersion(clientName)
+                + "\",\"userAgent\":\"test-user-agent\"}},\"videoId\":\"video\"}")
+                .getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static String clientVersion(final String clientName) {
+        return "ANDROID_VR".equals(clientName) ? "1.65.10" : "2.test";
     }
 }
