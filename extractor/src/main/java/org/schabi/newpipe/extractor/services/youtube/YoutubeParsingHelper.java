@@ -1288,6 +1288,17 @@ YoutubeParsingHelper {
                 IOS_YOUTUBE_KEY, endPartOfUrlRequest, callback);
     }
 
+    public static CancellableCall getJsonMobilePostResponseAsync(
+            final String endpoint,
+            final byte[] body,
+            @Nonnull final Localization localization,
+            @Nonnull final String userAgent,
+            @Nullable final String endPartOfUrlRequest,
+            final Downloader.AsyncCallback callback) throws IOException, ExtractionException {
+        return getMobilePostResponseAsync(endpoint, body, localization, userAgent, "",
+                endPartOfUrlRequest, callback);
+    }
+
     private static JsonObject getMobilePostResponse(
             final String endpoint,
             final byte[] body,
@@ -1600,6 +1611,9 @@ YoutubeParsingHelper {
             final String clientName = client.getString("clientName", "");
             final String clientVersion = client.getString("clientVersion", "");
             final String userAgent = client.getString("userAgent");
+            if ("TVHTML5".equals(clientName)) {
+                return new YoutubePlayerRequest(body, originalVisitorData, clientVersion);
+            }
             final JsonObject existingIntegrity = request.getObject("serviceIntegrityDimensions");
             final String existingPoToken = existingIntegrity == null
                     ? null : existingIntegrity.getString("poToken");
@@ -1948,6 +1962,15 @@ YoutubeParsingHelper {
     public static String getAndroidVRUserAgent(@Nullable final Localization localization) {
         return "com.google.android.apps.youtube.vr.oculus/" + ANDROID_VR_YOUTUBE_CLIENT_VERSION
                 + " (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip";
+    }
+
+    @Nonnull
+    public static String getVisionOsUserAgent(@Nullable final Localization localization) {
+        return "com.google.visionos.youtube/" + VISIONOS_CLIENT_VERSION + "("
+                + VISIONOS_DEVICE_MODEL + "; U; CPU visionOS " + VISIONOS_USER_AGENT_VERSION
+                + " like Mac OS X; "
+                + (localization != null ? localization : Localization.DEFAULT).getCountryCode()
+                + ")";
     }
 
     /**
@@ -2668,7 +2691,7 @@ YoutubeParsingHelper {
     }
 
     @Nonnull
-    static JsonBuilder<JsonObject> prepareJsonBuilder(
+    public static JsonBuilder<JsonObject> prepareJsonBuilder(
             @Nonnull final Localization localization,
             @Nonnull final ContentCountry contentCountry,
             @Nonnull final InnertubeClientRequestInfo innertubeClientRequestInfo,
