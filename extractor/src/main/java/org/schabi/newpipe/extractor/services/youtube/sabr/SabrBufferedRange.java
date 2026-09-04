@@ -67,6 +67,39 @@ public final class SabrBufferedRange {
                 + ":timescale=" + timescale;
     }
 
+    public int getItag() {
+        return itag;
+    }
+
+    public long getLastModified() {
+        return lastModified;
+    }
+
+    @Nullable
+    public String getXtags() {
+        return xtags;
+    }
+
+    public long getStartTimeMs() {
+        return startTimeMs;
+    }
+
+    public long getDurationMs() {
+        return durationMs;
+    }
+
+    public int getStartSegmentIndex() {
+        return startSegmentIndex;
+    }
+
+    public int getEndSegmentIndex() {
+        return endSegmentIndex;
+    }
+
+    public int getTimescale() {
+        return timescale;
+    }
+
     @Nonnull
     private byte[] formatIdProto() {
         final SabrProto.Writer format = new SabrProto.Writer();
