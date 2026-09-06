@@ -9,7 +9,6 @@ import org.schabi.newpipe.extractor.exceptions.ParsingException;
 import org.schabi.newpipe.extractor.localization.DateWrapper;
 import org.schabi.newpipe.extractor.localization.TimeAgoParser;
 import org.schabi.newpipe.extractor.stream.Description;
-import org.schabi.newpipe.extractor.utils.HtmlParser;
 import org.schabi.newpipe.extractor.utils.JsonUtils;
 import org.schabi.newpipe.extractor.utils.Utils;
 
@@ -176,20 +175,20 @@ public class YoutubeCommentsInfoItemExtractor implements CommentsInfoItemExtract
     }
 
     @Override
-    public String getCommentText() throws ParsingException {
+    public Description getCommentText() throws ParsingException {
         try {
             final JsonObject contentText = JsonUtils.getObject(commentRenderer, "contentText");
             if (contentText.isEmpty()) {
                 // completely empty comments as described in
                 // https://github.com/TeamNewPipe/NewPipeExtractor/issues/380#issuecomment-668808584
-                return "";
+                return Description.EMPTY_DESCRIPTION;
             }
             final String commentText = getTextFromObject(contentText, true);
             // YouTube adds U+FEFF in some comments.
             // eg. https://www.youtube.com/watch?v=Nj4F63E59io<feff>
             final String commentTextBomRemoved = Utils.removeUTF8BOM(commentText);
 
-            return HtmlParser.htmlToString(commentTextBomRemoved);
+            return new Description(commentTextBomRemoved, Description.HTML);
         } catch (final Exception e) {
             throw new ParsingException("Could not get comment text", e);
         }

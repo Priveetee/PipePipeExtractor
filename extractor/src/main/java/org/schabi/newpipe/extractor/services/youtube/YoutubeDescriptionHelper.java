@@ -137,7 +137,9 @@ public final class YoutubeDescriptionHelper {
                     : closers.get(closersIndex).pos;
 
             // append piece of text until current index
-            textBuilder.append(content, currentTextPos, minPos);
+            // escape the piece so that literal markup characters (e.g. "<3", "<b>") typed by
+            // the user are not interpreted as HTML tags later on
+            textBuilder.append(Entities.escape(content.substring(currentTextPos, minPos)));
             currentTextPos = minPos;
 
             if (closers.get(closersIndex).pos == minPos) {
@@ -176,7 +178,7 @@ public final class YoutubeDescriptionHelper {
         }
 
         // append last piece of text
-        textBuilder.append(content, currentTextPos, content.length());
+        textBuilder.append(Entities.escape(content.substring(currentTextPos)));
 
         return textBuilder.toString()
                 .replace("\n", "<br>")
