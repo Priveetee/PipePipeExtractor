@@ -8,7 +8,6 @@ import org.schabi.newpipe.extractor.exceptions.ParsingException;
 import org.schabi.newpipe.extractor.localization.DateWrapper;
 import org.schabi.newpipe.extractor.localization.TimeAgoParser;
 import org.schabi.newpipe.extractor.stream.Description;
-import org.schabi.newpipe.extractor.utils.HtmlParser;
 import org.schabi.newpipe.extractor.utils.Utils;
 
 import javax.annotation.Nonnull;
@@ -92,11 +91,11 @@ class YoutubeCommentsEUVMInfoItemExtractor implements CommentsInfoItemExtractor 
     }
 
     @Override
-    public String getCommentText() throws ParsingException {
+    public Description getCommentText() throws ParsingException {
         // Comments' text work in the same way as an attributed video description
-        return HtmlParser.htmlToString(new Description(
+        return new Description(
                 attributedDescriptionToHtml(commentEntityPayload.getObject(PROPERTIES)
-                        .getObject("content")), Description.HTML).getContent());
+                        .getObject("content")), Description.HTML);
     }
 
     @Override

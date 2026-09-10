@@ -4,6 +4,7 @@ import org.schabi.newpipe.extractor.Image;
 import org.schabi.newpipe.extractor.InfoItem;
 import org.schabi.newpipe.extractor.Page;
 import org.schabi.newpipe.extractor.localization.DateWrapper;
+import org.schabi.newpipe.extractor.stream.Description;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -14,7 +15,7 @@ import javax.annotation.Nullable;
 public class CommentsInfoItem extends InfoItem {
 
     private String commentId;
-    private String commentText;
+    private Description commentText = Description.EMPTY_DESCRIPTION;
     private String uploaderName;
     private String uploaderAvatarUrl;
     private String uploaderUrl;
@@ -50,12 +51,14 @@ public class CommentsInfoItem extends InfoItem {
         this.commentId = commentId;
     }
 
-    public String getCommentText() {
+    public Description getCommentText() {
         return commentText;
     }
 
-    public void setCommentText(final String commentText) {
-        this.commentText = commentText;
+    public void setCommentText(final Description commentText) {
+        if (commentText != null) {
+            this.commentText = commentText;
+        }
     }
 
     public String getUploaderName() {

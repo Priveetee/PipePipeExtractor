@@ -6,6 +6,7 @@ import org.schabi.newpipe.extractor.Page;
 import org.schabi.newpipe.extractor.comments.CommentsInfoItemExtractor;
 import org.schabi.newpipe.extractor.exceptions.ParsingException;
 import org.schabi.newpipe.extractor.localization.DateWrapper;
+import org.schabi.newpipe.extractor.stream.Description;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -51,12 +52,12 @@ public class NiconicoCommentsInfoItemExtractor implements CommentsInfoItemExtrac
     }
 
     @Override
-    public String getCommentText() throws ParsingException {
+    public Description getCommentText() throws ParsingException {
         final Duration diff = getDuration();
         @SuppressWarnings("DefaultLocale") final String hms = String.format("%02d:%02d",
                 diff.toMinutes(),
                 diff.getSeconds() % 60);
-        return hms + " " + getCommentTextRaw();
+        return new Description(hms + " " + getCommentTextRaw(), Description.PLAIN_TEXT);
     }
 
     @Override
